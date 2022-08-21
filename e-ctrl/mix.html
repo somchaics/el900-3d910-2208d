@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>three.js webgl - orbit controls</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <link type="text/css" rel="stylesheet" href="main.css">
+
+    <style>
+        #loading {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: xx-large;
+            font-family: sans-serif;
+        }
+
+            #loading > div > div {
+                padding: 2px;
+            }
+
+        .progress {
+            width: 50vw;
+            border: 1px solid black;
+        }
+
+        #progressbar {
+            width: 0%;
+            transition: width ease-out .5s;
+            height: 1em;
+            background-color: #888;
+            background-image: linear-gradient( -45deg, rgba(255, 255, 255, .5) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, .5) 50%, rgba(255, 255, 255, .5) 75%, transparent 75%, transparent );
+            background-size: 50px 50px;
+            animation: progressanim 2s linear infinite;
+        }
+
+        @keyframes progressanim {
+            0% {
+                background-position: 50px 50px;
+            }
+
+            100% {
+                background-position: 0 0;
+            }
+        }
+    </style>
+
+    <script type="module">
+
+        import * as THREE from '../../build/three.module.js';
+        import { OrbitControls } from '../jsm/controls/OrbitControls.js';
+        import { GLTFLoader } from '../jsm/loaders/GLTFLoader.js';
+        import * as SkeletonUtils from '../jsm/utils/SkeletonUtils.js';
+
+        let camera, scene, renderer;
+        let controls;
+        var keyboard;
+        var clock = new THREE.Clock();
+
+        var model;
+        const mixers = [];
+
+        init();
+        animate();
+
+        function init() {
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xcccccc);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 100, 2000);
+            camera.position.set(500, 150, 400);
+            //camera.position.set(100, 150, 400);
+            camera.lookAt(scene.position);
+
+            // controls
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableRotate = false;
+            controls.enableDamping = true; // an animation loop is required when either damping or auto-rotation are enabled
+            controls.dampingFactor = 0.05;
+            controls.screenSpacePanning = false;
+            controls.minDistance = 100;
+            controls.maxDistance = 500;
+            controls.maxPolarAngle = Math.PI / 2;
+
+            var grid = new THREE.GridHelper(5000, 40, 0x000000, 0x000000);
+            grid.material.opacity = 0.2;
+            grid.material.transparent = true;
+            grid.position.y = -20;
+            grid.position.z = -10;
+            scene.add(grid);
+
+
+            const dirLight1 = new THREE.DirectionalLight(0xffffff);
+            dirLight1.position.set(1, 1, 1);
+            scene.add(dirLight1);
+
+            const dirLight2 = new THREE.DirectionalLight(0x002288);
+            dirLight2.position.set(- 1, - 1, - 1);
+            scene.add(dirLight2);
+
+            const ambientLight = new THREE.AmbientLight(0x222222);
+            scene.add(ambientLight);
+
+            const manager = new THREE.LoadingManager();
+            manager.onLoad = f_load;
+
+            const progressbarElem = document.querySelector('#progressbar');
+            manager.onProgress = (url, itemsLoaded, itemsTotal) => {
+                progressbarElem.style.width = `${itemsLoaded / itemsTotal * 100 | 0}%`;
+            };
+
+            const models = {
+                a: { url: '../models/gltf/Parrot.glb', z:-100, y: 200 },
+                b: { url: '../models/gltf/Horse.glb', z: 0, y: -10 },
+                c: { url: '../models/gltf/Flamingo.glb', z: 0, y: 130 },
+            };
+
+            const gltfLoader = new GLTFLoader(manager);
+            for (const model of Object.values(models)) {
+                gltfLoader.load(model.url, (gltf) => {
+                    model.gltf = gltf;
+                });
+            }
+                     
+            function prepModelsAndAnimations() {
+                Object.values(models).forEach(model => {
+                    const animsByName = {};
+                    model.gltf.animations.forEach((clip) => {
+                        animsByName[clip.name] = clip;
+                    });
+                    model.animations = animsByName;
+                });
+            }
+
+            function f_load() {
+                // hide the loading bar
+                const loadingElem = document.querySelector('#loading');
+                loadingElem.style.display = 'none';
+
+                prepModelsAndAnimations();
+
+                Object.values(models).forEach((model, ndx) => {
+                    const clonedScene = SkeletonUtils.clone(model.gltf.scene);
+                    const root = new THREE.Object3D();
+                    root.add(clonedScene);
+                    scene.add(root);
+                    root.position.x = (ndx-3) * 300;
+                    root.position.y = model.y;
+                    root.position.z = -300;
+                   
+                    const mixer = new THREE.AnimationMixer(clonedScene);
+                    const firstClip = Object.values(model.animations)[0];
+
+                    const action = mixer.clipAction(firstClip);
+                    action.play();
+                    mixers.push(mixer);
+                });
+            }
+
+            window.addEventListener('resize', onWindowResize);
+
+            //window.addEventListener('keydown', function (event) {
+            //    event.preventDefault();
+            //    keyboard = event.keyCode;
+            //});
+            //window.addEventListener('keyup', function (event) {
+            //    event.preventDefault();
+            //    keyboard = '';
+            //});
+        }
+         
+        function onWindowResize() {
+
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        let then;
+        function animate() {
+            requestAnimationFrame(animate);
+            const deltaTime = clock.getDelta(); // seconds.
+            for (const mixer of mixers) {
+                mixer.update(deltaTime);
+            }
+
+            controls.update();
+
+            renderer.render(scene, camera);
+        }
+
+        //function update() {
+            //var delta = clock.getDelta(); // seconds.
+            //var moveDistance = 200 * delta; // 200 pixels per second
+            //var rotateAngle = Math.PI / 2 * delta;   // pi/2 radians (90 degrees) per second
+
+            //switch (keyboard) {
+            //    case 38: // up
+            //        model.position.z -= moveDistance;
+            //        break;
+            //    case 40: // dn
+            //        model.position.z += moveDistance;
+            //        break;
+            //    case 37: // left
+            //        model.position.x -= moveDistance;
+            //        break;
+            //    case 39: // right
+            //        model.position.x += moveDistance;
+            //        break;
+            //    case 65: // A
+            //        model.rotateOnAxis(new THREE.Vector3(0, 1, 0), rotateAngle);
+            //        break;
+            //    case 68: // D
+            //        model.rotateOnAxis(new THREE.Vector3(0, 1, 0), -rotateAngle);
+            //        break;
+            //    case 82: // R
+            //        model.rotateOnAxis(new THREE.Vector3(1, 0, 0), rotateAngle);
+            //        break;
+            //    case 70: // F
+            //        model.rotateOnAxis(new THREE.Vector3(1, 0, 0), -rotateAngle);
+            //        break;
+            //    case 90: //Z
+            //        model.position.set(0, -20, 0);
+            //        model.rotation.set(0, 0, 0);
+            //        break;
+
+            //}
+
+           // controls.update();
+            //  mixer.update(delta);
+        //}
+
+    </script>
+
+</head>
+
+<body>
+    <div id="info">
+        Mix <br />
+    </div>
+    <div id="loading">
+        <div>
+            <div>...loading...</div>
+            <div class="progress"><div id="progressbar"></div></div>
+        </div>
+    </div>
+   
+
+</body>
+</html>

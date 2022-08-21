@@ -1,0 +1,234 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+    <style>
+        #loading {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: xx-large;
+            font-family: sans-serif;
+        }
+
+            #loading > div > div {
+                padding: 2px;
+            }
+
+        .progress {
+            width: 50vw;
+            border: 1px solid black;
+        }
+
+        #progressbar {
+            width: 0%;
+            transition: width ease-out .5s;
+            height: 1em;
+            background-color: #888;
+            background-image: linear-gradient( -45deg, rgba(255, 255, 255, .5) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, .5) 50%, rgba(255, 255, 255, .5) 75%, transparent 75%, transparent );
+            background-size: 50px 50px;
+            animation: progressanim 2s linear infinite;
+        }
+
+        @keyframes progressanim {
+            0% {
+                background-position: 50px 50px;
+            }
+
+            100% {
+                background-position: 0 0;
+            }
+        }
+    </style>
+
+    <script type="module">
+        import * as THREE from '../../build/three.module.js';
+        import { OrbitControls } from '../jsm/controls/OrbitControls.js';
+        import { GLTFLoader } from '../jsm/loaders/GLTFLoader.js';
+        import * as SkeletonUtils from '../jsm/utils/SkeletonUtils.js';
+
+        let camera, scene, renderer;
+        let controls;
+        var keyboard;
+        var clock = new THREE.Clock();
+               
+        function main() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xcccccc);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 5000);
+            //camera.position.set(112, 100, 600);
+            //camera.lookAt(new THREE.Vector3(0, 2, 0));
+            camera.position.set(0, 150, 400);
+            camera.lookAt(scene.position);
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xa0a0a0);
+            scene.fog = new THREE.Fog(0xa0a0a0, 1000, 5000);
+
+            let light = new THREE.HemisphereLight(0xffffff, 0x444444);
+            light.position.set(0, 200, 0);
+            scene.add(light);
+
+            const shadowSize = 200;
+            light = new THREE.DirectionalLight(0xffffff);
+            light.position.set(0, 200, 100);
+            light.castShadow = true;
+            light.shadow.camera.top = shadowSize;
+            light.shadow.camera.bottom = -shadowSize;
+            light.shadow.camera.left = -shadowSize;
+            light.shadow.camera.right = shadowSize;
+            scene.add(light);
+
+            //// ground
+            //var mesh = new THREE.Mesh(new THREE.PlaneBufferGeometry(10000, 10000), new THREE.MeshPhongMaterial({ color: 0x999999, depthWrite: false }));
+            //mesh.rotation.x = - Math.PI / 2;
+            //mesh.receiveShadow = true;
+            //scene.add(mesh);
+
+            var grid = new THREE.GridHelper(5000, 40, 0x000000, 0x000000);
+            grid.material.opacity = 0.2;
+            grid.material.transparent = true;
+            scene.add(grid);
+
+            // controls
+            controls = new OrbitControls(camera, renderer.domElement);
+
+            controls.enableDamping = true; // an animation loop is required when either damping or auto-rotation are enabled
+            controls.dampingFactor = 0.05;
+            controls.screenSpacePanning = false;
+            controls.minDistance = 300;
+            controls.maxDistance = 500;
+            controls.maxPolarAngle = Math.PI / 2;
+                       
+            const manager = new THREE.LoadingManager();
+            manager.onLoad = init;
+
+            const progressbarElem = document.querySelector('#progressbar');
+            manager.onProgress = (url, itemsLoaded, itemsTotal) => {
+               progressbarElem.style.width = `${itemsLoaded / itemsTotal * 100 | 0}%`;
+            };
+
+            const models = {
+              //  a: { url: '../models/gltf/Soldier.glb', y: 100 },
+                b: { url: '../models/gltf/Parrot.glb', y: 150 },
+                c: { url: '../models/gltf/Horse.glb', y: -10 },
+                d: { url: '../models/gltf/Flamingo.glb', y: 130},
+              //  e: { url: '../models/gltf/RobotExpressive.glb' },
+
+                //pig: { url: 'https://threejsfundamentals.org/threejs/resources/models/animals/Pig.gltf' },
+                //cow: { url: 'https://threejsfundamentals.org/threejs/resources/models/animals/Cow.gltf' },
+                //llama: { url: 'https://threejsfundamentals.org/threejs/resources/models/animals/Llama.gltf' },
+                //pug: { url: 'https://threejsfundamentals.org/threejs/resources/models/animals/Pug.gltf' },
+                //sheep: { url: 'https://threejsfundamentals.org/threejs/resources/models/animals/Sheep.gltf' },
+                //zebra: { url: 'https://threejsfundamentals.org/threejs/resources/models/animals/Zebra.gltf' },
+                //horse: { url: 'https://threejsfundamentals.org/threejs/resources/models/animals/Horse.gltf' },
+                //knight: { url: 'https://threejsfundamentals.org/threejs/resources/models/knight/KnightCharacter.gltf' },
+            };
+
+            {
+                const gltfLoader = new GLTFLoader(manager);
+                for (const model of Object.values(models)) {
+                    gltfLoader.load(model.url, (gltf) => {
+                        model.gltf = gltf;
+                    });
+                }
+            }
+            
+            function prepModelsAndAnimations() {
+                Object.values(models).forEach(model => {
+                    const animsByName = {};
+                    model.gltf.animations.forEach((clip) => {
+                        animsByName[clip.name] = clip;
+                    });
+                    model.animations = animsByName;
+                });
+            }
+
+            const mixers = [];
+            
+            function init() {
+                // hide the loading bar
+                const loadingElem = document.querySelector('#loading');
+                loadingElem.style.display = 'none';
+
+                prepModelsAndAnimations();
+               
+                Object.values(models).forEach((model, ndx) => {
+                    const clonedScene = SkeletonUtils.clone(model.gltf.scene);
+                    const root = new THREE.Object3D();
+                    root.add(clonedScene);
+                    scene.add(root);
+                    root.position.x = (ndx - 3) * 100;
+                    root.position.y = model.y;//l100;
+                   // root.scale.set(10,10,10);
+                    const mixer = new THREE.AnimationMixer(clonedScene);
+                    const firstClip = Object.values(model.animations)[0];
+                  
+                    const action = mixer.clipAction(firstClip);
+                    action.play();
+                    mixers.push(mixer);
+                });
+
+                //document.getElementById('info').innerHTML = s;
+
+                window.addEventListener('resize', onWindowResize);
+            }
+
+            function onWindowResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+
+            let then;
+            function render(now) {
+                //var delta = clock.getDelta(); 
+                //var deltaTime = 200 * delta; // 200 pixels per second
+
+                now *= 0.001;  // convert to seconds
+                const deltaTime = now - then;
+                then = now;
+
+                for (const mixer of mixers) {
+                    mixer.update(deltaTime);
+                }
+                controls.update();
+                renderer.render(scene, camera);
+                requestAnimationFrame(render);
+            }
+
+           requestAnimationFrame(render);
+        }
+
+      
+        main();
+        
+        
+
+    </script>
+</head>
+<body>
+    <div id="info"></div>
+    <div id="loading">
+        <div>
+            <div>...loading...</div>
+            <div class="progress"><div id="progressbar"></div></div>
+        </div>
+    </div>
+
+
+</body>
+</html>

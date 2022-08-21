@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>three.js webgl - orbit controls</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<link type="text/css" rel="stylesheet" href="main.css">
+		<style>
+			body {
+				left: 0;
+				margin: 0;
+			}
+		</style>
+	</head>
+
+	<body>
+        <div id="info">
+            Character <br />ใช้ Mouse เหมือนกับ Map, Arraw key, AD RF Z
+        </div>
+
+		<script type="module">
+
+            import * as THREE from '../../build/three.module.js';
+            import { OrbitControls } from '../jsm/controls/OrbitControls.js';
+          
+			let camera,  scene, renderer;
+            let controls;
+            var keyboard;
+            var clock = new THREE.Clock();
+            var MovingCube;
+
+			init();
+			//render(); // remove when using next line for animation loop (requestAnimationFrame)
+			animate();
+
+			function init() {
+
+				scene = new THREE.Scene();
+				scene.background = new THREE.Color( 0xcccccc );
+				//scene.fog = new THREE.FogExp2( 0xcccccc, 0.002 );
+
+				renderer = new THREE.WebGLRenderer( { antialias: true } );
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				document.body.appendChild( renderer.domElement );
+
+				camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 0.1, 20000 );
+				//camera.position.set(400, 200, 0);
+                camera.position.set(0, 150, 400);
+               camera.lookAt(scene.position);
+				// controls
+
+                controls = new OrbitControls(camera, renderer.domElement);
+
+				//controls.addEventListener( 'change', render ); // call this only in static scenes (i.e., if there is no animation loop)
+
+				controls.enableDamping = true; // an animation loop is required when either damping or auto-rotation are enabled
+				controls.dampingFactor = 0.05;
+				controls.screenSpacePanning = false;
+				controls.minDistance = 190;
+				controls.maxDistance = 500;
+				controls.maxPolarAngle = Math.PI / 2;
+
+                var grid = new THREE.GridHelper(5000, 40, 0x000000, 0x000000);
+                grid.material.opacity = 0.2;
+				grid.material.transparent = true;
+				grid.position.y = -20;
+                grid.position.z = -10;
+				scene.add(grid);
+
+                const textureloader = new THREE.TextureLoader();
+                var materialArray = [];
+                materialArray.push(new THREE.MeshBasicMaterial({ map: textureloader.load('../textures/xpos.png') }));
+                materialArray.push(new THREE.MeshBasicMaterial({ map: textureloader.load('../textures/xneg.png') }));
+                materialArray.push(new THREE.MeshBasicMaterial({ map: textureloader.load('../textures/ypos.png') }));
+                materialArray.push(new THREE.MeshBasicMaterial({ map: textureloader.load('../textures/yneg.png') }));
+                materialArray.push(new THREE.MeshBasicMaterial({ map: textureloader.load('../textures/zpos.png') }));
+                materialArray.push(new THREE.MeshBasicMaterial({ map: textureloader.load('../textures/zneg.png') }));
+                var MovingCubeMat = new THREE.MeshFaceMaterial(materialArray);
+                var MovingCubeGeom = new THREE.BoxGeometry(80, 80, 80);
+				MovingCube = new THREE.Mesh(MovingCubeGeom, MovingCubeMat);
+                MovingCube.position.set(0, 0, -20);
+                scene.add(MovingCube);
+               
+
+				// lights
+
+				const dirLight1 = new THREE.DirectionalLight( 0xffffff );
+				dirLight1.position.set( 1, 1, 1 );
+				scene.add( dirLight1 );
+
+				const dirLight2 = new THREE.DirectionalLight( 0x002288 );
+				dirLight2.position.set( - 1, - 1, - 1 );
+				scene.add( dirLight2 );
+
+				const ambientLight = new THREE.AmbientLight( 0x222222 );
+				scene.add( ambientLight );
+				
+                window.addEventListener('resize', onWindowResize);
+
+                window.addEventListener('keydown', function (event) {
+                    event.preventDefault();
+                    keyboard = event.keyCode;
+                });
+                window.addEventListener('keyup', function (event) {
+                    event.preventDefault();
+                    keyboard = '';
+                });
+         	}
+                       
+
+			function onWindowResize() {
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+			}
+                      
+
+            //
+            function animate() {
+                requestAnimationFrame(animate);
+                update();
+                renderer.render(scene, camera);
+                
+            }
+
+            function update() {
+                var delta = clock.getDelta(); // seconds.
+                var moveDistance = 200 * delta; // 200 pixels per second
+                var rotateAngle = Math.PI / 2 * delta;   // pi/2 radians (90 degrees) per second
+                //var rotation_matrix = new THREE.Matrix4().identity();
+
+                switch (keyboard) {
+                    case 38: // up
+                        MovingCube.position.z -= moveDistance;
+                        break;
+                    case 40: // dn
+                        MovingCube.position.z += moveDistance;
+                        break;
+                    case 37: // left
+                        MovingCube.position.x -= moveDistance;
+                         break;
+                    case 39: // right
+                        MovingCube.position.x += moveDistance;
+                        break;
+                    //case 87: // w
+                    //    MovingCube.translateZ(-moveDistance);
+                    //    keyboard = '';
+                    //    break;
+                    //case 83: // s
+                    //    MovingCube.translateZ(moveDistance);
+                    //    keyboard = '';
+                    //    break;
+                    case 65: // a
+                        MovingCube.rotateOnAxis(new THREE.Vector3(0, 1, 0), rotateAngle);
+                        break;
+                    case 68: // d
+                        MovingCube.rotateOnAxis(new THREE.Vector3(0, 1, 0), -rotateAngle);
+                        break;
+                    case 82: // r
+                        MovingCube.rotateOnAxis(new THREE.Vector3(1, 0, 0), rotateAngle);
+                        break;
+                    case 70: // f
+                        MovingCube.rotateOnAxis(new THREE.Vector3(1, 0, 0), -rotateAngle);
+                        break;
+                    case 90: //z
+                        MovingCube.position.set(0, 25.1, 0);
+                        MovingCube.rotation.set(0, 0, 0);
+                        break;
+                    //default :
+                    //    document.getElementById('info').innerHTML = keyboard;
+                    //    break;
+                      
+                }
+                
+
+                //// move forwards/backwards/left/right
+                //if (keyboard.pressed("W"))
+                //    MovingCube.translateZ(-moveDistance);
+                //if (keyboard.pressed("S"))
+                //    MovingCube.translateZ(moveDistance);
+                //if (keyboard.pressed("Q"))
+                //    MovingCube.translateX(-moveDistance);
+                //if (keyboard.pressed("E"))
+                //    MovingCube.translateX(moveDistance);
+
+                //// rotate left/right/up/down
+                //var rotation_matrix = new THREE.Matrix4().identity();
+                //if (keyboard.pressed("A"))
+                //    MovingCube.rotateOnAxis(new THREE.Vector3(0, 1, 0), rotateAngle);
+                //if (keyboard.pressed("D"))
+                //    MovingCube.rotateOnAxis(new THREE.Vector3(0, 1, 0), -rotateAngle);
+                //if (keyboard.pressed("R"))
+                //    MovingCube.rotateOnAxis(new THREE.Vector3(1, 0, 0), rotateAngle);
+                //if (keyboard.pressed("F"))
+                //    MovingCube.rotateOnAxis(new THREE.Vector3(1, 0, 0), -rotateAngle);
+                                
+
+                controls.update();
+            }
+			
+		
+
+		</script>
+
+	</body>
+</html>
