@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>three.js cube</title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+	<link type="text/css" rel="stylesheet" href="main.css">
+	
+	
+    <script type="module">
+
+        import * as THREE from '../../build/three.module.js';
+
+        let camera, scene, renderer;
+        let mesh;
+
+        init(); //สร้างฉาก (ซีน Scene)
+        animate(); //แสดงผล
+
+        function init() {
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 1, 1000);
+            camera.position.z = 400;
+
+            scene = new THREE.Scene();
+                        
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            //เมื่อ resize windows ใช้สำหรับ update กล้อง camera
+            //ให้อยู่ในตำแหน่งเดิม
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        //updateProjectionMatrix()
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // ดู ฟังก์ชั่น requestAnimationFrame()
+        // เป็น ฟังก์ชั่น ของ window
+        //window.requestAnimationFrame()
+
+        function animate() {
+            requestAnimationFrame(animate); //loop เรียก ตัวเอง animate()
+   
+            renderer.render(scene, camera);
+        }
+
+    </script>
+
+</head>
+<body>
+	<div id="info">
+		<p style="font-family:Arial; font-size:14px; color:#0094ff; ">First</p>
+	</div>
+</body>
+</html>

@@ -1,0 +1,290 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Model</title>
+</head>
+<body>
+     <div id="info">
+            Charecter <br />Click to Play ใช้ keyboard Move (WSAD) Toggle: Q
+        </div>
+
+		<script type="module">
+
+            import * as THREE from '../../build/three.module.js';
+            import { OrbitControls } from '../jsm/controls/OrbitControls.js';
+            import { GLTFLoader } from '../jsm/loaders/GLTFLoader.js';
+        
+			let camera,  scene, renderer;
+            let controls;
+            var characterControls;
+            var keyboard;
+            var keysPressed = {};
+            var DIRECTIONS = ['w', 'a', 's', 'd'];
+            var clock = new THREE.Clock();
+
+            var model;
+            var mixer, actions, activeAction;
+            var mixer2;
+
+        var CharacterControls = (function () {
+            function CharacterControls (model, mixer, animationsMap, orbitControls, camera, currentAction) {
+                this.animationsMap = new Map(); // Walk, Run, Idle
+                // state
+                this.toggleRun = true;
+                // temporary data
+                this.walkDirection = new THREE.Vector3();
+                this.rotateAngle = new THREE.Vector3(0, 1, 0);
+                this.rotateQuarternion = new THREE.Quaternion();
+                this.cameraTarget = new THREE.Vector3();
+                // constants
+                this.fadeDuration = 0.2; //ระยะเวลา
+                this.runVelocity = 300; //ความเร็ว
+                this.walkVelocity = 120;
+                this.model = model;
+                this.mixer = mixer;
+                this.animationsMap = animationsMap;
+                this.currentAction = currentAction;
+                this.animationsMap.forEach(function (value, key) {
+                    if (key == currentAction) {
+                        value.play();
+                    }
+                });
+                this.orbitControl = orbitControls;
+                this.camera = camera;
+                this.updateCameraTarget(0, 0);
+            }
+
+            CharacterControls.prototype.updateCameraTarget = function (moveX, moveZ) {
+                // move camera
+                this.camera.position.x += moveX;
+                this.camera.position.z += moveZ;
+                // update camera target
+                this.cameraTarget.x = this.model.position.x;
+                this.cameraTarget.y = this.model.position.y + 1;
+                this.cameraTarget.z = this.model.position.z;
+                this.orbitControl.target = this.cameraTarget;
+            };
+
+            CharacterControls.prototype.switchRunToggle = function () {
+                this.toggleRun = !this.toggleRun;
+            };
+            CharacterControls.prototype.update = function (delta, keysPressed) {
+                var directionPressed = DIRECTIONS.some(function (key) { return keysPressed[key] == true; });
+
+                var play = '';
+                if (directionPressed && this.toggleRun) {
+                    play = 'Run';
+                }
+                else if (directionPressed) {
+                    play = 'Walk';
+                }
+                else {
+                    play = 'Idle';
+                }
+             
+                if (this.currentAction != play) {
+                    var toPlay = this.animationsMap.get(play);
+                    var current = this.animationsMap.get(this.currentAction);
+                    current.fadeOut(this.fadeDuration);
+                    toPlay.reset().fadeIn(this.fadeDuration).play();
+                    this.currentAction = play;
+                }
+                this.mixer.update(delta);
+              //  document.getElementById('info').innerHTML = this.currentAction;
+
+                if (this.currentAction == 'Run' || this.currentAction == 'Walk') {
+                    // calculate towards camera direction
+                    var angleYCameraDirection = Math.atan2((this.camera.position.x - this.model.position.x), (this.camera.position.z - this.model.position.z));
+                    // diagonal movement angle offset
+                    var directionOffset = this.directionOffset(keysPressed);
+                    // rotate model
+                    this.rotateQuarternion.setFromAxisAngle(this.rotateAngle, angleYCameraDirection + directionOffset);
+                    this.model.quaternion.rotateTowards(this.rotateQuarternion, 0.2);
+                    // calculate direction
+                    this.camera.getWorldDirection(this.walkDirection);
+                    this.walkDirection.y = 0;
+                    this.walkDirection.normalize();
+                    this.walkDirection.applyAxisAngle(this.rotateAngle, directionOffset);
+                    // run/walk velocity
+                    var velocity = this.currentAction == 'Run' ? this.runVelocity : this.walkVelocity;
+                    // move model & camera
+                    var moveX = this.walkDirection.x * velocity * delta;
+                    var moveZ = this.walkDirection.z * velocity * delta;
+                    this.model.position.x += moveX;
+                    this.model.position.z += moveZ;
+                    this.updateCameraTarget(moveX, moveZ);
+                }
+            };
+
+            CharacterControls.prototype.directionOffset = function (keysPressed) {
+                var directionOffset = 0; // w
+                if (keysPressed['w']) {
+                    if (keysPressed['a']) {
+                        directionOffset = Math.PI / 4; // w+a
+                    }
+                    else if (keysPressed['d']) {
+                        directionOffset = -Math.PI / 4; // w+d
+                    }
+                }
+                else if (keysPressed['s']) {
+                    if (keysPressed['a']) {
+                        directionOffset = Math.PI / 4 + Math.PI / 2; // s+a
+                    }
+                    else if (keysPressed['d']) {
+                        directionOffset = -Math.PI / 4 - Math.PI / 2; // s+d
+                    }
+                    else {
+                        directionOffset = Math.PI; // s
+                    }
+                }
+                else if (keysPressed['a']) {
+                    directionOffset = Math.PI / 2; // a
+                }
+                else if (keysPressed['d']) {
+                    directionOffset = -Math.PI / 2; // d
+                }
+                return directionOffset;
+            };
+
+
+            return CharacterControls;
+
+        }());
+       // exports.CharacterControls = CharacterControls;
+
+			init();
+			animate();
+
+			function init() {
+
+				scene = new THREE.Scene();
+				scene.background = new THREE.Color( 0xcccccc );
+	
+				renderer = new THREE.WebGLRenderer( { antialias: true } );
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+                renderer.shadowMap.enabled = true
+                document.body.appendChild(renderer.domElement);
+
+                camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 20000);
+                camera.position.set(0, 100, 200);
+                camera.lookAt(scene.position);
+
+				// controls
+                controls = new OrbitControls(camera, renderer.domElement);
+            	controls.enableDamping = true; // an animation loop is required when either damping or auto-rotation are enabled
+				controls.dampingFactor = 0.05;
+				controls.screenSpacePanning = false;
+				controls.minDistance = 100;
+				controls.maxDistance = 500;
+				controls.maxPolarAngle = Math.PI / 2;
+
+                var grid = new THREE.GridHelper(5000, 40, 0x000000, 0x000000);
+                grid.material.opacity = 0.2;
+				grid.material.transparent = true;
+				grid.position.y = -20;
+                grid.position.z = -10;
+                scene.add(grid);
+
+                
+
+                const loader = new GLTFLoader();
+                loader.load('../models/gltf/Soldier.glb', function (gltf) {
+                    model = gltf.scene;
+                    model.scale.set(80, 80, 80);
+                    model.position.set(0, -20, 0);
+
+                    model.traverse(function (object) {
+                        if (object.isMesh) object.castShadow = true;
+                    });
+                    scene.add(model);
+                    mixer = new THREE.AnimationMixer(model);
+
+                    var gltfAnimations = gltf.animations;
+                    //Idle Run TPose Walk
+                    var animationsMap = new Map();
+                    gltfAnimations.filter(function (a) { return a.name != 'TPose'; }).forEach(function (a) {
+                        animationsMap.set(a.name, mixer.clipAction(a));
+                    });
+                    //animationsMap.forEach(function (value, key) {
+                    //    if (key == 'Walk') {
+                    //        value.play();
+                    //    }
+                    //});
+                    characterControls = new CharacterControls(model, mixer, animationsMap, controls, camera, 'Run');
+                    //mixer.clipAction(gltf.animations[0]).play();
+                   // mixer.clipAction(gltf.animations[2]).play();
+  
+                }, undefined, function (e) {
+
+                    console.error(e);
+
+                });
+				// lights
+
+				const dirLight1 = new THREE.DirectionalLight( 0xffffff );
+				dirLight1.position.set( 1, 1, 1 );
+				scene.add( dirLight1 );
+
+				const dirLight2 = new THREE.DirectionalLight( 0x002288 );
+				dirLight2.position.set( - 1, - 1, - 1 );
+				scene.add( dirLight2 );
+
+				const ambientLight = new THREE.AmbientLight( 0x222222 );
+				scene.add( ambientLight );
+				
+                window.addEventListener('resize', onWindowResize);
+
+                document.addEventListener('keydown', function (event) {
+                   // keyDisplayQueue.down(event.key);
+                    if (event.key.toLowerCase()=='q' && characterControls) {
+                        characterControls.switchRunToggle();
+                    }
+                    else {
+                        keysPressed[event.key.toLowerCase()] = true;
+                    }
+                    
+                }, false);
+                document.addEventListener('keyup', function (event) {
+                   // keyDisplayQueue.up(event.key);
+                    keysPressed[event.key.toLowerCase()] = false;
+                }, false);
+
+         	}
+                       
+
+			function onWindowResize() {
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+			}
+
+            function animate() {
+               requestAnimationFrame(animate);
+                var mixerUpdateDelta = clock.getDelta();
+                if (characterControls) {
+                    characterControls.update(mixerUpdateDelta, keysPressed);
+                }
+               
+                renderer.render(scene, camera);
+
+            }
+
+            //function update() {
+            //    var delta = clock.getDelta(); // seconds.
+            //    var moveDistance = 200 * delta; // 200 pixels per second
+            //    var rotateAngle = Math.PI / 2 * delta;   // pi/2 radians (90 degrees) per second
+
+            //    controls.update();
+            //    mixer.update(delta);
+            //}
+
+
+           
+
+        </script>
+</body>
+</html>

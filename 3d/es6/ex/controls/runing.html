@@ -1,0 +1,192 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+</head>
+<body>
+     <div id="info">
+            Walk <br />Arraw key, AD RF Z
+        </div>
+
+		<script type="module">
+
+            import * as THREE from '../../build/three.module.js';
+            import { OrbitControls } from '../jsm/controls/OrbitControls.js';
+            import { GLTFLoader } from '../jsm/loaders/GLTFLoader.js';
+            import * as SkeletonUtils from '../jsm/utils/SkeletonUtils.js';
+
+			let camera,  scene, renderer;
+            let controls;
+            var keyboard;
+            var clock = new THREE.Clock();
+
+            var model;
+            var mixer, actions, activeAction;
+            var mixer2;
+
+			init();
+			animate();
+
+			function init() {
+
+				scene = new THREE.Scene();
+				scene.background = new THREE.Color( 0xcccccc );
+	
+				renderer = new THREE.WebGLRenderer( { antialias: true } );
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				document.body.appendChild( renderer.domElement );
+
+                camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 1, 20000);//camera.position.set(400, 200, 0);
+                camera.position.set(0, 150, 400);
+                camera.lookAt(scene.position);
+
+				// controls
+                controls = new OrbitControls(camera, renderer.domElement);
+            	controls.enableDamping = true; // an animation loop is required when either damping or auto-rotation are enabled
+				controls.dampingFactor = 0.05;
+				controls.screenSpacePanning = false;
+				controls.minDistance = 100;
+				controls.maxDistance = 500;
+				controls.maxPolarAngle = Math.PI / 2;
+
+                var grid = new THREE.GridHelper(5000, 40, 0x000000, 0x000000);
+                grid.material.opacity = 0.2;
+				grid.material.transparent = true;
+				grid.position.y = -20;
+                grid.position.z = -10;
+				scene.add(grid);
+                
+                const loader = new GLTFLoader();
+                loader.load('../models/gltf/Soldier.glb', function (gltf) {
+                    model = gltf.scene;
+                    model.scale.set(80, 80, 80);
+                    model.position.set(0, -20, 0);
+
+                    scene.add(model);
+                    mixer = new THREE.AnimationMixer(gltf.scene);
+                    //mixer.clipAction(gltf.animations[0]).play();
+                    mixer.clipAction(gltf.animations[1]).play();
+
+                    const clonedScene = SkeletonUtils.clone(gltf.scene);
+                    if (clonedScene) {
+                        const root = new THREE.Object3D();
+                        root.add(clonedScene);
+                        clonedScene.scale.set(50, 50, 50);
+                        clonedScene.position.set(100, -20, 0);
+                        clonedScene.rotateOnAxis(new THREE.Vector3(0, 1, 0), Math.PI / 2);
+                        scene.add(root);
+
+                         mixer2 = new THREE.AnimationMixer(clonedScene);
+                     //   mixer.clipAction(gltf.animations[0]).play();
+                        mixer2.clipAction(gltf.animations[1]).play();
+                    //    //mixer.clipAction(gltf.animations[3]).play();
+                       
+                    }
+
+                }, undefined, function (e) {
+
+                    console.error(e);
+
+                });
+				// lights
+
+				const dirLight1 = new THREE.DirectionalLight( 0xffffff );
+				dirLight1.position.set( 1, 1, 1 );
+				scene.add( dirLight1 );
+
+				const dirLight2 = new THREE.DirectionalLight( 0x002288 );
+				dirLight2.position.set( - 1, - 1, - 1 );
+				scene.add( dirLight2 );
+
+				const ambientLight = new THREE.AmbientLight( 0x222222 );
+				scene.add( ambientLight );
+				
+                window.addEventListener('resize', onWindowResize);
+
+                window.addEventListener('keydown', function (event) {
+                    event.preventDefault();
+                    keyboard = event.keyCode;
+                });
+                window.addEventListener('keyup', function (event) {
+                    event.preventDefault();
+                    keyboard = '';
+                });
+         	}
+                       
+
+			function onWindowResize() {
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+			}
+
+        
+            function animate() {
+                requestAnimationFrame(animate);
+                update();
+               
+                renderer.render(scene, camera);
+                
+            }
+
+            function update() {
+                var delta = clock.getDelta(); // seconds.
+                var moveDistance = 200 * delta; // 200 pixels per second
+                var rotateAngle = Math.PI / 2 * delta;   // pi/2 radians (90 degrees) per second
+       
+                switch (keyboard) {
+                    case 38: // up
+                        model.position.z -= moveDistance;
+                        break;
+                    case 40: // dn
+                        model.position.z += moveDistance;
+                        break;
+                    case 37: // left
+                        model.position.x -= moveDistance;
+                         break;
+                    case 39: // right
+                        model.position.x += moveDistance;
+                        break;
+                    case 65: // A
+                        model.rotateOnAxis(new THREE.Vector3(0, 1, 0), rotateAngle);
+                        break;
+                    case 68: // D
+                        model.rotateOnAxis(new THREE.Vector3(0, 1, 0), -rotateAngle);
+                        break;
+                    case 82: // R
+                        model.rotateOnAxis(new THREE.Vector3(1, 0, 0), rotateAngle);
+                        break;
+                    case 70: // F
+                        model.rotateOnAxis(new THREE.Vector3(1, 0, 0), -rotateAngle);
+                        break;
+                    case 90: //Z
+                        model.position.set(0, -20, 0);
+                        model.rotation.set(0, 0, 0);
+                        break;
+                     
+                }
+
+
+                //var relativeCameraOffset = new THREE.Vector3(1, 1, 3);
+                //var cameraOffset = relativeCameraOffset.applyMatrix4(model.matrixWorld);
+
+                //camera.position.x = cameraOffset.x;
+                //camera.position.y = cameraOffset.y;
+                //camera.position.z = cameraOffset.z;
+                //camera.lookAt(model.position);
+
+                controls.update();
+                mixer.update(delta);
+                mixer2.update(delta);
+
+
+            }
+		
+
+        </script>
+</body>
+</html>
